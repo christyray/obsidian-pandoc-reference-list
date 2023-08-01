@@ -389,9 +389,11 @@ export function getCitations(
         label = seg.val;
         continue;
       // Adding the values for the literature note path and citation type to
-      // the citation
+      // the citation; using composite = true treats the citation as bare 
+      // (i.e., no brackets or parentheses)
       case SegmentType.litNote:
         litNote = seg.val;
+        composite = true;
         continue;
       case SegmentType.citeType:
         citeType = seg.val;
