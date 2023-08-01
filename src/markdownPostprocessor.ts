@@ -33,7 +33,7 @@ export function processCiteKeys(plugin: ReferenceList) {
 
     // We wont get a sectionInfo in print mode
     const cache = plugin.bibManager.getCacheForPath(ctx.sourcePath);
-    const sectionCites = sectionInfo
+    let sectionCites = sectionInfo
       ? plugin.bibManager.getCitationsForSection(
           ctx.sourcePath,
           sectionInfo.lineStart,
@@ -42,6 +42,10 @@ export function processCiteKeys(plugin: ReferenceList) {
       : cache?.citations;
 
     if (!sectionCites?.length) return;
+    
+    // Sort citations by note index to ensure correct citation versions get
+    // matched and filtered
+    sectionCites.sort((a, b) => a.noteIndex - b.noteIndex);
 
     let node;
     while ((node = walker.nextNode())) {
@@ -70,6 +74,12 @@ export function processCiteKeys(plugin: ReferenceList) {
         // the citation segments in the current text section
         const rendered = sectionCites.find((c) =>
           equal(onlyKey(c.data), onlyKey(match))
+        );
+
+        // Drop the selected citation from the section citation array to
+        // prevent the incorrect version of the citation being used
+        sectionCites = sectionCites.filter((c) => 
+          c.noteIndex !== rendered.noteIndex || typeof c.noteIndex === "undefined"
         );
 
         if (rendered) {

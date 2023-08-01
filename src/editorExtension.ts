@@ -185,12 +185,16 @@ export const citeKeyPlugin = ViewPlugin.fromClass(
 
       const b = new RangeSetBuilder<Decoration>();
       const obsView = view.state.field(editorInfoField);
-      const citekeyCache = view.state.field(citeKeyCacheField);
+      let citekeyCache = view.state.field(citeKeyCacheField);
       const isLivePreview =
         settings.renderCitations && view.state.field(editorLivePreviewField);
 
       // Don't get the syntax tree until we have to
       let tree: Tree;
+
+      // Sort citations by note index to ensure correct citation versions get
+      // matched and filtered
+      citekeyCache?.citations.sort((a, b) => a.noteIndex - b.noteIndex);
 
       const matched = new Set<RenderedCitation>();
 
@@ -203,14 +207,29 @@ export const citeKeyPlugin = ViewPlugin.fromClass(
 
         for (const match of segments) {
           if (!tree) tree = syntaxTree(view.state);
+
+          // Determines the maximum noteIndex that has already been matched in 
+          // the current section
+          // ... spreads the set into individual values, which then can be 
+          // mapped into to access the noteIndex values
+          // Must select only the finite values to remove undefined values
+          // before checking the max
+          const indices = [...matched].map(
+            (c) => c?.noteIndex).filter(value => Number.isFinite(value)
+          );
+          const maxIndex = Math.max(...indices);
+
           // Looks for all citations in the cache that have citekeys matching 
           // the citation segments in the current viewing range
+          // Checking that the noteIndex is greater than the previous max to 
+          // make sure it is not matching a citation from an earlier section
           // Originally needed to call `renderCrossrefType` here separately, but
           // that isn't necessary now that I am adding the crossref citations to
           // the cache
           const rendered = citekeyCache?.citations.find(
             (c) =>
               !matched.has(c) &&
+              (c?.noteIndex >= maxIndex || c?.noteIndex == null) &&
               equal(onlyKey(c?.data || []), onlyKey(match)));
 
           if (rendered) {
