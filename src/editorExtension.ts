@@ -87,9 +87,11 @@ class CiteWidget extends WidgetType {
   }
 
   toDOM() {
+    // Adds the different attributes to the citations in Editing mode
     const attr: Record<string, string> = {
       'data-citekey': this.cite.citations.map((c) => c.id).join('|'),
       'data-source': this.sourcePath,
+      'data-citetype': this.cite.citations[0].citeType || 'lit',
     };
 
     if (this.cite.note) {
@@ -143,8 +145,14 @@ const citeDeco = (
     widget: new CiteWidget(cite, sourcePath, linkText),
   });
 
-function onlyValType(segs: Segment[]) {
-  return segs.map((s) => ({ type: s.type, val: s.val }));
+// I replaced the original "onlyValType" function with "onlyKey" to also match 
+// citations with internal links
+// function onlyValType(segs: Segment[]) {
+//   return segs.map((s) => ({ type: s.type, val: s.val }));
+// }
+function onlyKey(segs: Segment[]) {
+  let valType = segs.map((s) => ({ type: s.type, val: s.val }));
+  return valType.filter((s) => s.type === "key" );
 }
 
 export const citeKeyPlugin = ViewPlugin.fromClass(
@@ -195,11 +203,15 @@ export const citeKeyPlugin = ViewPlugin.fromClass(
 
         for (const match of segments) {
           if (!tree) tree = syntaxTree(view.state);
+          // Looks for all citations in the cache that have citekeys matching 
+          // the citation segments in the current viewing range
+          // Originally needed to call `renderCrossrefType` here separately, but
+          // that isn't necessary now that I am adding the crossref citations to
+          // the cache
           const rendered = citekeyCache?.citations.find(
             (c) =>
               !matched.has(c) &&
-              equal(onlyValType(c?.data || []), onlyValType(match))
-          );
+              equal(onlyKey(c?.data || []), onlyKey(match)));
 
           if (rendered) {
             matched.add(rendered);

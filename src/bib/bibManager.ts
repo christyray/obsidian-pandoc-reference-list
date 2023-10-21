@@ -21,6 +21,7 @@ import {
   RenderedCitation,
   getCitationSegments,
   getCitations,
+  renderCrossrefType,
 } from 'src/parser/parser';
 import LRUCache from 'lru-cache';
 import { Keymap, MarkdownView, TFile, setIcon } from 'obsidian';
@@ -705,7 +706,11 @@ export class BibManager {
     // Do we need this?
     // source.engine.updateItems(Array.from(resolvedKeys));
 
-    const citations = cite(source.engine, filtered);
+    let citations = cite(source.engine, filtered);
+
+    // Add rendered Pandoc crossref citations to the cached citation list
+    const crossrefType = renderCrossrefType(processed);
+    citations = citations.concat(crossrefType);
 
     if (
       cachedDoc &&

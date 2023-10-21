@@ -14,6 +14,14 @@ export enum SegmentType {
   locator = 'locator',
   locatorLabel = 'locatorLabel',
   separator = 'separator',
+
+  // Citations in internal links
+  litNote = 'litNote',
+  linkSeparator = 'linkSeparator',
+
+  // Pandoc crossref citations
+  citeType = 'citeType',
+  typeSeparator = 'typeSeparator',
 }
 
 export interface Segment {
@@ -61,9 +69,14 @@ const alphaNumeric = /[\p{L}\p{N}]/u;
 const punct = /[:.#$%&\-+?<>~_/]/;
 const nonKeyPunct = /\p{P}/u;
 const space = /[ \t\v]/;
-const preKey = /[ \t\v[\-\r\n;]/;
+// Added the link separator | to the list of valid symbols before a citation key
+const preKey = /[ \t\v[\-\r\n;|]/;
+// postKeyPunct defines the symbols that are allowed to occur after valid bare citations
+const postKeyPunct = /[.?,;):]/;
 const locatorRe =
   /^((?:[[(]?[a-z\p{N}]+[\])]?[-—:][[(]?[a-z\p{N}]+[\])]?|[a-z\p{N}()[\]]*\p{N}+[a-z\p{N}()[\]]*|[mdclxvi]+)(?:[ \t]*,[ \t]*(?:[[(]?[a-z\p{N}]+[\])]?[-—:][[(]?[a-z\p{N}]+[\])]?|[a-z\p{N}()[\]]*\p{N}+[a-z\p{N}()[\]]*|[mdclxvi]+))*)/iu;
+// Defines the crossref-style citation types
+const citeTypes = /(fig|tbl|eq)/;
 
 function isTerminus(s?: string) {
   return !s || s === '\r' || s === '\n';
@@ -73,16 +86,29 @@ function isValidPreKey(s?: string) {
   return !s || preKey.test(s);
 }
 
+// Added litNote and citeType to the citation segment data
 export function getSegmentData(segments: Segment[]) {
   let key: string;
   let locator: string;
   let locatorLabel: string;
   let prefix: string;
   let suffix: string;
+  let litNote: string;
+  let citeType: string;
 
   for (const seg of segments) {
     if (seg.type === SegmentType.prefix) {
       prefix = seg.val;
+      continue;
+    }
+
+    if (seg.type === SegmentType.litNote) {
+      litNote = seg.val;
+      continue;
+    }
+
+    if (seg.type === SegmentType.citeType) {
+      citeType = seg.val;
       continue;
     }
 
@@ -114,6 +140,8 @@ export function getSegmentData(segments: Segment[]) {
     locatorLabel,
     prefix,
     suffix,
+    litNote,
+    citeType,
   };
 }
 
@@ -240,12 +268,15 @@ const parseExplicitLocator = (state: State) => {
   return segments;
 };
 
+// Added litNote and citeType to the citation data
 export interface Citation {
   prefix?: string;
   suffix?: string;
   infix?: string;
   locator?: string;
   label?: string;
+  litNote?: string;
+  citeType?: string;
   'suppress-author'?: boolean;
   'author-only'?: boolean;
   composite?: boolean;
@@ -278,6 +309,10 @@ export function getCitations(
   let locator: string;
   let label: string;
 
+  // Adding extra fields to the citation for literature note paths and citation types
+  let litNote: string;
+  let citeType: string;
+
   let suppressAuthor = false;
   let onlyAuthor = false;
   let composite = false;
@@ -290,6 +325,8 @@ export function getCitations(
     if (prefix?.trim()) cite.prefix = prefix.trim();
     if (suffix?.trim()) cite.suffix = suffix.trim();
     if (infix?.trim()) cite.infix = infix.trim();
+    if (litNote?.trim()) cite.litNote = litNote.trim();
+    if (citeType?.trim()) cite.citeType = citeType.trim();
     if (locator) cite.locator = locator;
     if (label && locatorToTerm[locale] && locatorToTerm[locale][label]) {
       cite.label = locatorToTerm[locale][label];
@@ -331,6 +368,7 @@ export function getCitations(
         locator = undefined;
         label = undefined;
         infix = undefined;
+        litNote = undefined;  // Citation groups will not have lit note links
         onlyAuthor = false;
         suppressAuthor = false;
         composite = false;
@@ -349,6 +387,14 @@ export function getCitations(
         continue;
       case SegmentType.locatorLabel:
         label = seg.val;
+        continue;
+      // Adding the values for the literature note path and citation type to
+      // the citation
+      case SegmentType.litNote:
+        litNote = seg.val;
+        continue;
+      case SegmentType.citeType:
+        citeType = seg.val;
         continue;
     }
   }
@@ -462,7 +508,9 @@ export function getCitationSegments(str: string, ignoreLinks: boolean = false) {
         continue;
       }
 
-      if (prev === '@') {
+      // For crossref-style citations, the citekey begins after the citation 
+      // type label with a colon
+      if (prev === '@' || prev === ':') {
         if (alphaNumeric.test(c) || c === '_') {
           endCurrent(i);
           state.currentSegment = newCurrent(i, c, SegmentType.key);
@@ -546,6 +594,15 @@ export function getCitationSegments(str: string, ignoreLinks: boolean = false) {
           continue;
         }
 
+        // If the previous string is one of the crossref citation types
+        if (citeTypes.test(state.currentSegment.val)) {
+          // Change the type of the previous text to citeType and end the segment
+          state.currentSegment.type = SegmentType.citeType;
+          endCurrent(i);
+          state.currentSegment = newCurrent(i, c, SegmentType.typeSeparator);
+          continue;
+        }
+
         if (next && punct.test(next)) {
           // Double punct
           endCurrent(i);
@@ -561,7 +618,12 @@ export function getCitationSegments(str: string, ignoreLinks: boolean = false) {
         }
 
         if (space.test(next)) {
-          if (!state.inBrackets) {
+          // Treat the segment as a valid citation if the punctuation is a valid
+          // post-key punctuation type and the citation is bare
+          if (!state.inBrackets && postKeyPunct.test(c)) {
+            endCurrent(i);
+            endSegment();
+          } else if (!state.inBrackets) {
             endSegment();
           } else {
             endCurrent(i);
@@ -630,6 +692,17 @@ export function getCitationSegments(str: string, ignoreLinks: boolean = false) {
         state.shouldCancelSeek = false;
         endCurrent(i);
         state.currentSegment = newCurrent(i, c, SegmentType.suppressor);
+        continue;
+      }
+
+      // If a vertical bar is found before an @, the previous text is the path to the literature note
+      if (c === '|' && next === '@') {
+        // shouldCancelSeek = true would indicate that the current citation is complete
+        state.shouldCancelSeek = false; 
+        // Change the type of the previous text to litNote and end the segment
+        state.currentSegment.type = SegmentType.litNote;
+        endCurrent(i);
+        state.currentSegment = newCurrent(i, c, SegmentType.linkSeparator);
         continue;
       }
 
@@ -716,4 +789,84 @@ export function getCitationSegments(str: string, ignoreLinks: boolean = false) {
   }
 
   return segments;
+}
+
+// Function to build the rendered text for crossref-style citations (figures, 
+// equations, and tables)
+export function renderCrossrefType(group: CitationGroup[]) {
+  // Specifying the return variable object type
+  const cites: RenderedCitation[] = [];
+
+  // Label will be the rendered label for the citation type, and the other 
+  // variables set up the full concatenated citation
+  let label: string;
+  const citeOpen = "[";
+  const citeClose = "]";
+  const citeJoin = ", ";
+
+  // Builds a RenderedCitation object from the existing citation data and the 
+  // newly generated label
+  // This is essentially a local function to use just inside this function
+  const buildCite = (citeLabel: string, group: CitationGroup) => {
+    const cite: RenderedCitation = {
+      data: group.data,
+      citations: group.citations,
+      from: group.from,
+      to: group.to,
+      val: citeLabel,
+    };
+
+    // Concatenates the current citation to the array of rendered citations for
+    // the function output
+    cites.push(cite);
+  };
+
+  // Filters the citation list to just the crossref-style citations
+  const citeTypes = /(fig|tbl|eq)/;
+  const crossrefType = group.filter((s) =>
+    s.citations.some((c) => {
+      const matchType = citeTypes.test(c.citeType);
+      return matchType;
+    })
+  );
+
+  // For each crossref-style citation, builds the full citation label from the 
+  // citation type and the citekey; joins together multiple citekeys if it is a
+  // citation group
+  for (let i = 0; i < crossrefType.length; i++) {
+    const citation = crossrefType[i];
+    switch (citation.citations[0].citeType) {
+      case "fig":
+        if (citation.citations.length > 1) {
+          label = "Figures ";
+        } else {
+          label = "Figure ";
+        }
+        break;
+      case "eq":
+        if (citation.citations.length > 1) {
+          label = "Equations ";
+        } else {
+          label = "Equation ";
+        }
+        break;
+      case "tbl":
+        if (citation.citations.length > 1) {
+          label = "Tables ";
+        } else {
+          label = "Table ";
+        }
+        break;
+    }
+
+    const citeId = citation.citations.map((c) => c.id).join(citeJoin);
+    const citeLabel = citeOpen + label + citeId + citeClose;
+
+    // Call the local function to build the RenderedCitation object from the
+    // existing citation and the new citation label
+    buildCite(citeLabel, citation);
+  }
+
+  // Returns the array of rendered citations
+  return cites;
 }

@@ -12,8 +12,14 @@ function getCiteClass(isResolved: boolean, isUnresolved: boolean) {
   return cls.join(' ');
 }
 
-function onlyValType(segs: Segment[]) {
-  return segs.map((s) => ({ type: s.type, val: s.val }));
+// I replaced the original "onlyValType" function with "onlyKey" to also match 
+// citations with internal links
+// function onlyValType(segs: Segment[]) {
+//   return segs.map((s) => ({ type: s.type, val: s.val }));
+// }
+function onlyKey(segs: Segment[]) {
+  let valType = segs.map((s) => ({ type: s.type, val: s.val }));
+  return valType.filter((s) => s.type === "key" );
 }
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -60,15 +66,19 @@ export function processCiteKeys(plugin: ReferenceList) {
       for (const match of segments) {
         if (!didMatch) didMatch = true;
 
+        // Looks for all citations in the cache that have citekeys matching 
+        // the citation segments in the current text section
         const rendered = sectionCites.find((c) =>
-          equal(onlyValType(c.data), onlyValType(match))
+          equal(onlyKey(c.data), onlyKey(match))
         );
 
         if (rendered) {
           const preCite = content.substring(pos, match[0].from);
+          // Adds the different attributes to the citations in Preview mode
           const attr: Record<string, string> = {
             'data-citekey': rendered.citations.map((c) => c.id).join('|'),
             'data-source': ctx.sourcePath,
+            'data-citetype': rendered.citations[0].citeType || 'lit',
           };
 
           if (rendered.note) {
