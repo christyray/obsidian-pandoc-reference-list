@@ -313,13 +313,22 @@ export class BibManager {
 
       this.bibCache = new Map();
       const bibPath = getBibPath(settings.pathToBibliography, getVaultRoot);
+      const bibDir = path.dirname(bibPath);
+      const bibName = path.basename(bibPath);
 
       if (bibPath && !this.watcherCache.has(bibPath)) {
+
+        // fs.watch() specifically watches the file's original inode, which 
+        // might change when the file is saved (in particular, it is changed 
+        // when BibDesk saves the file); to work around this, we can file the
+        // directory where the citation library is held instead
+        // When the inode is changed, it triggers a "rename" event by fs.watch()
+        // See https://github.com/nodejs/node/issues/5039 for more info
         let dbTimer = 0;
         this.watcherCache.set(
           bibPath,
-          watch(bibPath, (evt) => {
-            if (evt === 'change') {
+          watch(bibDir, (evt, changed_file) => {
+            if (changed_file === bibName) {
               clearTimeout(dbTimer);
               dbTimer = activeWindow.setTimeout(() => {
                 this.loadGlobalBibFile().then(() => {
@@ -327,8 +336,6 @@ export class BibManager {
                   this.plugin.processReferences();
                 });
               }, 100);
-            } else {
-              this.clearWatcher(bibPath);
             }
           })
         );
@@ -642,19 +649,21 @@ export class BibManager {
 
     if (settings?.bibliography) {
       const bibPath = getBibPath(settings.bibliography, getVaultRoot);
+      const bibDir = path.dirname(bibPath);
+      const bibName = path.basename(bibPath);
+
+      // Same changes to the watcher setup as in loadGlobalBibFile() above
       if (!this.watcherCache.has(bibPath)) {
         let dbTimer = 0;
         this.watcherCache.set(
           bibPath,
-          watch(bibPath, (evt) => {
-            if (evt === 'change') {
+          watch(bibDir, (evt, changed_file) => {
+            if (changed_file === bibName) {
               clearTimeout(dbTimer);
               dbTimer = activeWindow.setTimeout(() => {
                 this.fileCache.delete(file);
                 this.plugin.processReferences();
               }, 100);
-            } else {
-              this.clearWatcher(bibPath);
             }
           })
         );
