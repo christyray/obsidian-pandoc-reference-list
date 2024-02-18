@@ -43,10 +43,6 @@ export function processCiteKeys(plugin: ReferenceList) {
 
     if (!sectionCites?.length) return;
     
-    // Sort citations by note index to ensure correct citation versions get
-    // matched and filtered
-    sectionCites.sort((a, b) => a.noteIndex - b.noteIndex);
-
     let node;
     while ((node = walker.nextNode())) {
       if (node.parentElement && node.parentElement.tagName === 'CODE') {

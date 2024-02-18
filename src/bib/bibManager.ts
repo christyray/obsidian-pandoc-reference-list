@@ -721,6 +721,10 @@ export class BibManager {
     const crossrefType = renderCrossrefType(processed);
     citations = citations.concat(crossrefType);
 
+    // Sort citations in order of appearance in the note; necessary to ensure
+    // citations get matched in order in the correct sections
+    citations.sort((a, b) => a.noteIndex - b.noteIndex);
+
     if (
       cachedDoc &&
       equal(cachedDoc.citations, citations) &&

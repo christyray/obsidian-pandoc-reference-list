@@ -192,10 +192,6 @@ export const citeKeyPlugin = ViewPlugin.fromClass(
       // Don't get the syntax tree until we have to
       let tree: Tree;
 
-      // Sort citations by note index to ensure correct citation versions get
-      // matched and filtered
-      citekeyCache?.citations.sort((a, b) => a.noteIndex - b.noteIndex);
-
       const matched = new Set<RenderedCitation>();
 
       for (const { from, to } of view.visibleRanges) {
