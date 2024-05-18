@@ -76,7 +76,7 @@ const postKeyPunct = /[.?,;):]/;
 const locatorRe =
   /^((?:[[(]?[a-z\p{N}]+[\])]?[-—:][[(]?[a-z\p{N}]+[\])]?|[a-z\p{N}()[\]]*\p{N}+[a-z\p{N}()[\]]*|[mdclxvi]+)(?:[ \t]*,[ \t]*(?:[[(]?[a-z\p{N}]+[\])]?[-—:][[(]?[a-z\p{N}]+[\])]?|[a-z\p{N}()[\]]*\p{N}+[a-z\p{N}()[\]]*|[mdclxvi]+))*)/iu;
 // Defines the crossref-style citation types
-const citeTypes = /(fig|tbl|eq)/;
+const citeTypes = /(fig|tbl|eq|sec)/;
 
 function isTerminus(s?: string) {
   return !s || s === '\r' || s === '\n';
@@ -794,7 +794,7 @@ export function getCitationSegments(str: string, ignoreLinks: boolean = false) {
 }
 
 // Function to build the rendered text for crossref-style citations (figures, 
-// equations, and tables)
+// equations, tables, and sections)
 export function renderCrossrefType(group: CitationGroup[]) {
   // Specifying the return variable object type
   const cites: RenderedCitation[] = [];
@@ -824,7 +824,7 @@ export function renderCrossrefType(group: CitationGroup[]) {
   };
 
   // Filters the citation list to just the crossref-style citations
-  const citeTypes = /(fig|tbl|eq)/;
+  const citeTypes = /(fig|tbl|eq|sec)/;
   const crossrefType = group.filter((s) =>
     s.citations.some((c) => {
       const matchType = citeTypes.test(c.citeType);
@@ -857,6 +857,13 @@ export function renderCrossrefType(group: CitationGroup[]) {
           label = "Tables ";
         } else {
           label = "Table ";
+        }
+        break;
+      case "sec":
+        if (citation.citations.length > 1) {
+          label = "Sections ";
+        } else {
+          label = "Section ";
         }
         break;
     }
